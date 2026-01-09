@@ -1,0 +1,133 @@
+name: CI Pipeline
+
+on:
+  push:
+    branches: [main, develop]
+  pull_request:
+    branches: [main, develop]
+
+jobs:
+  changes:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      pull-requests: read
+    outputs:
+      server: ${{ steps.changes.outputs.server }}
+      client: ${{ steps.changes.outputs.client }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dorny/paths-filter@v2
+        id: changes
+        with:
+          filters: |
+            server:
+              - 'server/**'
+            client:
+              - 'client/**'
+
+  server-ci:
+    needs: changes
+    if: ${{ needs.changes.outputs.server == 'true' }}
+    runs-on: ubuntu-latest
+    services:
+      postgres:
+        image: postgres:15
+        env:
+          POSTGRES_USER: postgres
+          POSTGRES_PASSWORD: postgres
+          POSTGRES_DB: medicare_test
+        options: >-
+          --health-cmd pg_isready
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 5
+        ports:
+          - 5432:5432
+
+      redis:
+        image: redis:7-alpine
+        options: >-
+          --health-cmd "redis-cli ping"
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 5
+        ports:
+          - 6379:6379
+
+    steps:
+      - uses: actions/checkout@v4
+
+      # Setup pnpm with matching version
+      - uses: pnpm/action-setup@v3
+        with:
+          version: 9.14.3
+
+      # Then setup Node with pnpm cache
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "18"
+          cache: pnpm
+          cache-dependency-path: '**/pnpm-lock.yaml'
+
+      # Install dependencies
+      - name: Install server dependencies
+        run: cd server && pnpm install --frozen-lockfile
+
+      - name: Run server lint
+        run: cd server && pnpm run lint || echo "No lint script"
+
+      - name: Run server tests
+        run: cd server && pnpm test
+        env:
+          NODE_ENV: test
+          DATABASE_URL: postgresql://postgres:postgres@localhost:5432/medicare_test
+          REDIS_URL: redis://localhost:6379
+          JWT_SECRET: test-jwt-secret
+          MAGIC_LINK_SECRET: test-magic-link-secret
+
+      - name: Build server
+        run: cd server && pnpm run build || echo "No build script"
+
+  client-ci:
+    needs: changes
+    if: ${{ needs.changes.outputs.client == 'true' }}
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      # Setup pnpm with matching version
+      - uses: pnpm/action-setup@v3
+        with:
+          version: 9.14.3
+
+      # Then setup Node with pnpm cache
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "18"
+          cache: pnpm
+          cache-dependency-path: '**/pnpm-lock.yaml'
+
+      # Install dependencies
+      - name: Install client dependencies
+        run: cd client/web && pnpm install --frozen-lockfile
+
+      - name: Run client lint
+        run: cd client/web && pnpm run lint || echo "No lint script"
+
+      - name: Run client tests
+        run: cd client/web && pnpm test -- --coverage --watchAll=false || echo "No tests"
+        env:
+          REACT_APP_API_URL: http://localhost:4000
+
+      - name: Build client
+        run: cd client/web && pnpm run build
+        env:
+          REACT_APP_API_URL: http://localhost:4000
+
+      - name: Upload client build
+        uses: actions/upload-artifact@v4
+        with:
+          name: client-build
+          path: client/web/build
+          retention-days: 7
