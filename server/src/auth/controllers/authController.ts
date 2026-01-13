@@ -220,6 +220,7 @@ export const authController = {
         secure: process.env.NODE_ENV === "production",
         sameSite: "lax",
         maxAge: 3600 * 1000, // 1h
+        path: "/",
       });
 
       res.cookie("refresh_token", refreshTokenValue, {
@@ -227,6 +228,7 @@ export const authController = {
         secure: process.env.NODE_ENV === "production",
         sameSite: "lax",
         maxAge: 30 * 24 * 60 * 60 * 1000, // 30 days
+        path: "/",
       });
 
       res.cookie("is_onboarded", String(user.isOnboard), {
@@ -234,6 +236,7 @@ export const authController = {
         secure: process.env.NODE_ENV === "production",
         sameSite: "lax",
         maxAge: 30 * 24 * 60 * 60 * 1000,
+        path: "/",
       });
 
       // Create a new session
@@ -324,12 +327,12 @@ export const authController = {
         });
       });
 
-      // Set new cookies
       res.cookie("auth_token", newAccessToken, {
         httpOnly: true,
         secure: process.env.NODE_ENV === "production",
         sameSite: "lax",
         maxAge: 3600 * 1000, // 1h
+        path: "/",
       });
 
       res.cookie("refresh_token", newRefreshTokenValue, {
@@ -337,6 +340,7 @@ export const authController = {
         secure: process.env.NODE_ENV === "production",
         sameSite: "lax",
         maxAge: 30 * 24 * 60 * 60 * 1000, // 30 days
+        path: "/",
       });
 
       res.cookie("is_onboarded", String(user.isOnboard), {
@@ -344,6 +348,7 @@ export const authController = {
         secure: process.env.NODE_ENV === "production",
         sameSite: "lax",
         maxAge: 30 * 24 * 60 * 60 * 1000,
+        path: "/",
       });
 
       return res.json({ success: true });

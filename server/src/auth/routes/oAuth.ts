@@ -110,12 +110,12 @@ router.get(
       // ✅ Create a new session record
       await createSession(user.id, req);
 
-      // Set HTTP-only cookies
       res.cookie("auth_token", accessToken, {
         httpOnly: true,
         secure: process.env.NODE_ENV === "production",
         sameSite: "lax",
         maxAge: 3600 * 1000, // 1h
+        path: "/",
       });
 
       res.cookie("refresh_token", refreshTokenValue, {
@@ -123,6 +123,7 @@ router.get(
         secure: process.env.NODE_ENV === "production",
         sameSite: "lax",
         maxAge: 30 * 24 * 60 * 60 * 1000, // 30 days
+        path: "/",
       });
 
       res.cookie("is_onboarded", String(user.isOnboard), {
@@ -130,6 +131,7 @@ router.get(
         secure: process.env.NODE_ENV === "production",
         sameSite: "lax",
         maxAge: 30 * 24 * 60 * 60 * 1000,
+        path: "/",
       });
 
       // Check if user needs to complete onboarding

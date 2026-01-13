@@ -13,7 +13,7 @@ export default function Layout({
   return (
     <main className="min-h-svh container p-0 md:p-8 mx-auto">
       <div className="bg-background flex min-h-svh flex-col items-center justify-center gap-6 p-6 md:p-10">
-        <div className="w-full max-w-xs">{children}</div>
+        <div className="w-full max-">{children}</div>
       </div>
     </main>
   );

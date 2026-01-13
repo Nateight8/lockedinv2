@@ -11,16 +11,33 @@ export function middleware(request: NextRequest) {
 
   const isAuthenticated = !!(authToken || refreshToken);
 
-  // 1. If authenticated and trying to access auth pages, redirect to home
-  if (isAuthenticated && pathname.startsWith("/auth")) {
+  if (!isAuthenticated) {
+    // If NOT authenticated, allow access to auth pages, but maybe protect other pages?
+    // For now, let's just ensure they don't get stuck in a redirect
+    return NextResponse.next();
+  }
+
+  // --- From here on, the user IS authenticated ---
+
+  // 1. Handle Onboarding Redirect
+  if (!isOnboarded && pathname !== "/onboard") {
+    console.log("[Middleware] Redirecting unonboarded user to /onboard");
+    return NextResponse.redirect(new URL("/onboard", request.url));
+  }
+
+  // 2. Handle Auth Pages Redirect (if already onboarded)
+  if (
+    isOnboarded &&
+    (pathname.startsWith("/auth") || pathname === "/onboard")
+  ) {
+    console.log(
+      "[Middleware] Redirecting onboarded user away from auth/onboard to /"
+    );
     return NextResponse.redirect(new URL("/", request.url));
   }
 
-  // 2. If authenticated but not onboarded, redirect to /onboard
-  // Avoid redirect loop if already on /onboard
-  if (isAuthenticated && !isOnboarded && pathname !== "/onboard") {
-    // Only redirect if it's a page request (not api/assets/etc)
-    // Next.js middleware already respects the matcher, but we should be careful
+  // 3. Handle /auth specifically for unonboarded (though handled by #1, being explicit helps)
+  if (isAuthenticated && !isOnboarded && pathname.startsWith("/auth")) {
     return NextResponse.redirect(new URL("/onboard", request.url));
   }
 
