@@ -229,6 +229,13 @@ export const authController = {
         maxAge: 30 * 24 * 60 * 60 * 1000, // 30 days
       });
 
+      res.cookie("is_onboarded", String(user.isOnboard), {
+        httpOnly: true,
+        secure: process.env.NODE_ENV === "production",
+        sameSite: "lax",
+        maxAge: 30 * 24 * 60 * 60 * 1000,
+      });
+
       // Create a new session
       await createSession(user.id, req);
 
@@ -250,7 +257,7 @@ export const authController = {
           timeZone: user.timeZone,
           createdAt: user.createdAt,
           updatedAt: user.updatedAt,
-          onboarded: user.onboarded,
+          isOnboard: user.isOnboard,
         },
       });
     } catch (err) {
@@ -330,6 +337,13 @@ export const authController = {
         secure: process.env.NODE_ENV === "production",
         sameSite: "lax",
         maxAge: 30 * 24 * 60 * 60 * 1000, // 30 days
+      });
+
+      res.cookie("is_onboarded", String(user.isOnboard), {
+        httpOnly: true,
+        secure: process.env.NODE_ENV === "production",
+        sameSite: "lax",
+        maxAge: 30 * 24 * 60 * 60 * 1000,
       });
 
       return res.json({ success: true });

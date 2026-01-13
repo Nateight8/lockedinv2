@@ -15,7 +15,7 @@ import { createSession } from "../services/sessionService";
 
 const magicLinkService = new MagicLinkServiceImpl(magicLinkConfig);
 
-const router = Router();
+const router: Router = Router();
 
 // Rate limiting
 const rateLimiter = new RateLimiterMemory({
@@ -27,11 +27,6 @@ const rateLimiter = new RateLimiterMemory({
 router.get("/auth/google", async (req, res, next) => {
   try {
     await rateLimiter.consume(req.ip ?? "unknown-ip");
-
-    // Store any state or return URL before authentication
-    if (req.query.returnTo) {
-      req.session.returnTo = req.query.returnTo as string;
-    }
 
     // Initialize authentication with Google
     return passport.authenticate("google", {
@@ -130,9 +125,16 @@ router.get(
         maxAge: 30 * 24 * 60 * 60 * 1000, // 30 days
       });
 
+      res.cookie("is_onboarded", String(user.isOnboard), {
+        httpOnly: true,
+        secure: process.env.NODE_ENV === "production",
+        sameSite: "lax",
+        maxAge: 30 * 24 * 60 * 60 * 1000,
+      });
+
       // Check if user needs to complete onboarding
-      if (!user.onboarded) {
-        return res.redirect(`${process.env.CORS_ORIGIN}/onboarding`);
+      if (!user.isOnboard) {
+        return res.redirect(`${process.env.CORS_ORIGIN}/onboard`);
       }
 
       // Redirect onboarded users to the root path

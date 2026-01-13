@@ -41,7 +41,11 @@ export function AuthForm() {
   });
 
   function onSubmit(values: z.infer<typeof formSchema>) {
-    sendMagicLink(values);
+    sendMagicLink(values, {
+      onSuccess: () => {
+        form.reset();
+      },
+    });
   }
 
   return (

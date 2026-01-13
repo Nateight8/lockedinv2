@@ -13,6 +13,7 @@ export const userTypeDefs = gql`
     timeZone: String
     createdAt: String!
     updatedAt: String!
+    isOnboard: Boolean!
   }
 
   """

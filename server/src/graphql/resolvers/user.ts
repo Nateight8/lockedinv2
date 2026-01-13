@@ -147,13 +147,22 @@ export const userResolvers = {
       // Parse date string to Date object for database storage
       if (dateOfBirth !== undefined) data.dateOfBirth = new Date(dateOfBirth);
 
-      // Mark as onboarded if name is provided and it's not yet true
-      if (!existingUser.onboarded && displayName) {
-        data.onboarded = true;
+      // Mark as isOnboard if name is provided and it's not yet true
+      if (!existingUser.isOnboard && displayName) {
+        data.isOnboard = true;
       }
 
       try {
         await db.update(users).set(data).where(eq(users.id, ctx.user.id));
+
+        if (data.isOnboard) {
+          ctx.res?.cookie("is_onboarded", "true", {
+            httpOnly: true,
+            secure: process.env.NODE_ENV === "production",
+            sameSite: "lax",
+            maxAge: 30 * 24 * 60 * 60 * 1000,
+          });
+        }
 
         return { success: true };
       } catch (e: any) {
