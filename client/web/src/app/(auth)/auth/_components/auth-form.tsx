@@ -28,7 +28,11 @@ const formSchema = z.object({
   }),
 });
 
+import { useSendMagicLink } from "@/hooks/use-auth";
+
 export function AuthForm() {
+  const { mutate: sendMagicLink, isPending: loading } = useSendMagicLink();
+
   const form = useForm<z.infer<typeof formSchema>>({
     resolver: zodResolver(formSchema),
     defaultValues: {
@@ -37,7 +41,7 @@ export function AuthForm() {
   });
 
   function onSubmit(values: z.infer<typeof formSchema>) {
-    console.log(values);
+    sendMagicLink(values);
   }
 
   return (
@@ -51,15 +55,19 @@ export function AuthForm() {
           name="email"
           render={({ field }) => (
             <Field>
-              <FieldLabel>Email</FieldLabel>
               <FormControl>
-                <Input size="lg" placeholder="nate@example.com" {...field} />
+                <Input
+                  disabled={loading}
+                  size="lg"
+                  placeholder="nate@example.com"
+                  {...field}
+                />
               </FormControl>
               <FormMessage />
             </Field>
           )}
         />
-        <Button className="w-full" size="lg" type="submit">
+        <Button disabled={loading} className="w-full" size="lg" type="submit">
           Submit
         </Button>
       </form>
