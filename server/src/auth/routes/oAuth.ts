@@ -3,13 +3,14 @@ import passport from "passport";
 import { RateLimiterMemory } from "rate-limiter-flexible";
 // No need for @types/rate-limiter-flexible as types are included
 import { redisUtil } from "@/lib/redis";
-import { User } from "@prisma/client";
+import { User } from "@/db/schema/users";
 import { MagicLinkServiceImpl } from "../services/magicLinkService";
 import { magicLinkConfig } from "../config/magicLinkConfig";
 
 import { addDays } from "date-fns";
 import crypto from "crypto";
-import prisma from "@/lib/prisma";
+import { db } from "@/db";
+import { refreshTokens } from "@/db/schema/auth";
 import { createSession } from "../services/sessionService";
 
 const magicLinkService = new MagicLinkServiceImpl(magicLinkConfig);
@@ -105,12 +106,10 @@ router.get(
         .digest("hex");
 
       // Store refresh token in database
-      await prisma.refreshToken.create({
-        data: {
-          tokenHash: refreshTokenHash,
-          userId: user.id,
-          expiresAt: addDays(new Date(), 30),
-        },
+      await db.insert(refreshTokens).values({
+        tokenHash: refreshTokenHash,
+        userId: user.id,
+        expiresAt: addDays(new Date(), 30),
       });
 
       // ✅ Create a new session record

@@ -1,5 +1,6 @@
-import { PrismaClient, User } from "@prisma/client";
 import { Request, Response } from "express";
+import { DbClient } from "@/db";
+import { User } from "@/db/schema/users";
 
 export type ContextUser = {
   id?: string;
@@ -12,20 +13,20 @@ export type ContextUser = {
 } | null;
 
 export interface Context {
-  prisma: PrismaClient;
+  db: DbClient;
   user: ContextUser;
   res?: Response | undefined;
   req?: Request | undefined;
 }
 
 export function createContext(
-  prisma: PrismaClient,
+  db: DbClient,
   user: ContextUser = null,
   res?: Response,
   req?: Request
 ): Context {
   return {
-    prisma,
+    db,
     user,
     res,
     req,

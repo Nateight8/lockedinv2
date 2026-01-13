@@ -6,11 +6,13 @@ import { redisUtil } from "@/lib/redis";
 import { createHash } from "crypto";
 import { accountDeletionQueue } from "@/queues/accountDeletion";
 import { extractIp, extractUserAgent } from "@/auth/services/sessionService";
+import { users, refreshTokens, sessions } from "@/db/schema";
+import { eq, and } from "drizzle-orm";
 
 export const userResolvers = {
   Query: {
     me: async (_: any, __: any, ctx: GraphqlContext) => {
-      const { user } = ctx;
+      const { user, db } = ctx;
 
       if (!user?.id) {
         throw new GraphQLError("Not authenticated", {
@@ -18,18 +20,8 @@ export const userResolvers = {
         });
       }
 
-      const updatedUser = await ctx.prisma.user.findUnique({
-        where: { id: user.id },
-        select: {
-          id: true,
-          email: true,
-          name: true,
-          phone: true,
-          timeZone: true,
-          onboarded: true,
-          createdAt: true,
-          updatedAt: true,
-        },
+      const updatedUser = await db.query.users.findFirst({
+        where: eq(users.id, user.id),
       });
 
       if (!updatedUser) {
@@ -51,18 +43,19 @@ export const userResolvers = {
       }
 
       const userId = ctx.user.id;
+      const db = ctx.db;
 
       try {
         // 1️⃣ Mark user as "pending deletion" (soft delete)
         const now = new Date();
 
-        await ctx.prisma.user.update({
-          where: { id: userId },
-          data: { deletedAt: now }, // <== deletedAt
-        });
+        await db
+          .update(users)
+          .set({ deletedAt: now })
+          .where(eq(users.id, userId));
 
         // 2️⃣ Clear sensitive tokens immediately
-        await ctx.prisma.refreshToken.deleteMany({ where: { userId } });
+        await db.delete(refreshTokens).where(eq(refreshTokens.userId, userId));
 
         // 3️⃣ Schedule permanent deletion in BullMQ
         // The delay is GRACE_PERIOD in ms
@@ -120,6 +113,7 @@ export const userResolvers = {
         });
       }
 
+      const db = ctx.db;
       const { displayName, phone, timeZone, dateOfBirth, image } = input;
 
       if (timeZone && !isValidIANA(timeZone)) {
@@ -128,9 +122,8 @@ export const userResolvers = {
         });
       }
 
-      const existingUser = await ctx.prisma.user.findUnique({
-        where: { id: ctx.user.id },
-        select: { name: true, onboarded: true },
+      const existingUser = await db.query.users.findFirst({
+        where: eq(users.id, ctx.user.id),
       });
 
       if (!existingUser) {
@@ -160,10 +153,7 @@ export const userResolvers = {
       }
 
       try {
-        await ctx.prisma.user.update({
-          where: { id: ctx.user.id },
-          data,
-        });
+        await db.update(users).set(data).where(eq(users.id, ctx.user.id));
 
         return { success: true };
       } catch (e: any) {
@@ -189,7 +179,7 @@ export const userResolvers = {
     },
 
     logout: async (_: unknown, __: unknown, ctx: GraphqlContext) => {
-      const { user, prisma, res, req } = ctx;
+      const { user, db, res, req } = ctx;
       if (!user?.id) {
         return { success: true }; // Already logged out
       }
@@ -203,9 +193,14 @@ export const userResolvers = {
             .digest("hex");
 
           // Delete refresh token from DB
-          await prisma.refreshToken.deleteMany({
-            where: { tokenHash: refreshTokenHash, userId: user.id },
-          });
+          await db
+            .delete(refreshTokens)
+            .where(
+              and(
+                eq(refreshTokens.tokenHash, refreshTokenHash),
+                eq(refreshTokens.userId, user.id)
+              )
+            );
         }
 
         // 🔑 Mark session inactive
@@ -218,15 +213,17 @@ export const userResolvers = {
         // Cast req to any to satisfy the SessionRequest interface
         const ip = extractIp(req as any);
 
-        await prisma.session.updateMany({
-          where: {
-            userId: user.id,
-            userAgent,
-            ip,
-            isActive: true,
-          },
-          data: { isActive: false },
-        });
+        await db
+          .update(sessions)
+          .set({ isActive: false })
+          .where(
+            and(
+              eq(sessions.userId, user.id),
+              eq(sessions.userAgent, userAgent),
+              eq(sessions.ip, ip),
+              eq(sessions.isActive, true)
+            )
+          );
 
         // Clear cookies
         res?.clearCookie("auth_token", {

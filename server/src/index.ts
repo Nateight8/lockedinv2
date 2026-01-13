@@ -1,3 +1,4 @@
+import "dotenv/config";
 import { createServer } from "./graphql/server";
 
 const PORT = process.env.PORT || 4000;

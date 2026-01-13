@@ -1,4 +1,6 @@
-import prisma from "@/lib/prisma";
+import { db } from "@/db";
+import { sessions } from "@/db/schema/auth";
+import { eq, and, isNull } from "drizzle-orm";
 import geoip from "geoip-lite";
 import { nanoid } from "nanoid/non-secure";
 
@@ -45,38 +47,36 @@ export async function createSession(userId: string, req: SessionRequest) {
   const expiresAt = new Date();
   expiresAt.setDate(expiresAt.getDate() + SESSION_TTL_DAYS);
 
-  const existing = await prisma.session.findFirst({
-    where: {
-      userId,
-      userAgent,
-      ip: ip || null,
-      isActive: true,
-    },
+  const existing = await db.query.sessions.findFirst({
+    where: and(
+      eq(sessions.userId, userId),
+      eq(sessions.userAgent, userAgent),
+      ip ? eq(sessions.ip, ip) : isNull(sessions.ip),
+      eq(sessions.isActive, true)
+    ),
   });
 
   if (existing) {
-    return prisma.session.update({
-      where: { id: existing.id },
-      data: {
+    return db
+      .update(sessions)
+      .set({
         lastActive: new Date(),
         expiresAt,
         city: geo?.city || existing.city,
         region: geo?.region || existing.region,
         country: geo?.country || existing.country,
-      },
-    });
+      })
+      .where(eq(sessions.id, existing.id));
   }
 
-  return prisma.session.create({
-    data: {
-      id: nanoid(),
-      userId,
-      userAgent,
-      ip: ip || null,
-      city: geo?.city || null,
-      region: geo?.region || null,
-      country: geo?.country || null,
-      expiresAt,
-    },
+  return db.insert(sessions).values({
+    id: nanoid(),
+    userId,
+    userAgent,
+    ip: ip || null,
+    city: geo?.city || null,
+    region: geo?.region || null,
+    country: geo?.country || null,
+    expiresAt,
   });
 }

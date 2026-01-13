@@ -30,14 +30,10 @@
     "exactOptionalPropertyTypes": true,
     "baseUrl": "./src",
     "paths": {
-      "@/*": ["*"],
-      "@/db/*": ["db/*"],
-      "@/routes/*": ["routes/*"],
-      "@/middleware/*": ["middleware/*"],
-      "@/utils/*": ["utils/*"]
+      "@/*": ["./*"]
     }
   },
-  "include": ["src/**/*", "drizzle.config.ts", "src/types"],
+  "include": ["src/**/*", "src/types"],
   "exclude": ["node_modules", "dist", "drizzle"],
   "ts-node": {
     "esm": true,

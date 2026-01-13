@@ -15,7 +15,9 @@ import { typeDefs } from "./typedefs";
 import { resolvers } from "./resolvers";
 import { createContext } from "./context";
 import { JWTTokenService } from "@/auth/services/tokenService";
-import prisma from "@/lib/prisma";
+import { db } from "@/db";
+import { users } from "@/db/schema/users";
+import { eq } from "drizzle-orm";
 
 import authRoutes from "@/auth/routes/mAuth";
 import oauthRoutes from "@/auth/routes/oAuth";
@@ -81,7 +83,7 @@ export async function createServer() {
 
           if (!token) {
             console.log("No authentication token found in headers or cookies");
-            return createContext(prisma, null, res, req);
+            return createContext(db, null, res, req);
           }
 
           console.log("Extracted token:", token);
@@ -91,7 +93,7 @@ export async function createServer() {
             );
             if (!tokenPayload) {
               console.log("Invalid or expired token");
-              return createContext(prisma, null, res, req);
+              return createContext(db, null, res, req);
             }
 
             console.log("Token payload:", tokenPayload);
@@ -99,12 +101,12 @@ export async function createServer() {
             // Fetch the full user from the database using userId from the token
             if (!tokenPayload.userId) {
               console.log("No userId in token payload");
-              return createContext(prisma, null, res, req);
+              return createContext(db, null, res, req);
             }
 
-            const user = await prisma.user.findUnique({
-              where: { id: tokenPayload.userId },
-              select: {
+            const user = await db.query.users.findFirst({
+              where: eq(users.id, tokenPayload.userId),
+              columns: {
                 id: true,
                 email: true,
                 name: true,
@@ -117,17 +119,17 @@ export async function createServer() {
 
             if (!user) {
               console.log("User not found in database");
-              return createContext(prisma, null, res, req);
+              return createContext(db, null, res, req);
             }
 
             console.log("User found:", user);
-            return createContext(prisma, user, res, req);
+            return createContext(db, user, res, req);
           } catch (error) {
             console.error("Error verifying token:", error);
             throw error;
           }
         } catch {
-          return createContext(prisma);
+          return createContext(db);
         }
       },
     })

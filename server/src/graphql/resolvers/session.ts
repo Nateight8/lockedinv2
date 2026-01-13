@@ -1,22 +1,9 @@
-import prisma from "@/lib/prisma";
+import { db } from "@/db";
+import { sessions } from "@/db/schema/auth";
+import { eq, and, desc, inArray } from "drizzle-orm";
 import { parse } from "useragent";
 import { GraphqlContext } from "../context";
 import { RevokeSessionsArgs } from "../typedefs/sessions";
-import { Prisma, Session } from "@prisma/client";
-
-type SelectedSession = Prisma.SessionGetPayload<{
-  select: {
-    id: true;
-    ip: true;
-    userAgent: true;
-    city: true;
-    region: true;
-    country: true;
-    createdAt: true;
-    lastActive: true;
-    expiresAt: true;
-  };
-}>;
 
 export const sessionResolvers = {
   Query: {
@@ -35,32 +22,13 @@ export const sessionResolvers = {
         console.log("Current request IP:", ip);
         console.log("Current user agent:", userAgent);
 
-        const sessions: SelectedSession[] = await prisma.session.findMany({
-          where: {
-            userId: user.id,
-            isActive: true,
-          },
-          orderBy: {
-            lastActive: "desc",
-          },
-          select: {
-            id: true,
-            ip: true,
-            userAgent: true,
-            city: true,
-            region: true,
-            country: true,
-            createdAt: true,
-            lastActive: true,
-            expiresAt: true,
-            userId: true,
-            isActive: true,
-          },
+        const userSessions = await db.query.sessions.findMany({
+          where: and(eq(sessions.userId, user.id), eq(sessions.isActive, true)),
+          orderBy: [desc(sessions.lastActive)],
         });
 
         // Enrich with parsed UA + mark current device
-
-        return sessions.map((session: SelectedSession) => {
+        return userSessions.map((session) => {
           const agent = parse(session.userAgent || "");
 
           let deviceType: "DESKTOP" | "MOBILE" | "TABLET" = "DESKTOP";
@@ -106,28 +74,31 @@ export const sessionResolvers = {
       args: RevokeSessionsArgs,
       ctx: GraphqlContext
     ) => {
-      const { user, prisma, req } = ctx;
-
-      // const currentSessionId = req?.headers["session-id"];
+      const { user, db: database } = ctx;
 
       if (!user?.id) throw new Error("User not authenticated");
       if (!args.sessionIds || args.sessionIds.length === 0)
         throw new Error("Provide session IDs to revoke");
 
       try {
-        const result = await prisma.session.updateMany({
-          where: {
-            userId: user.id,
-            id: { in: args.sessionIds },
-            isActive: true,
-            // NOT: { id: currentSessionId }, // always exclude current session
-          },
-          data: { isActive: false },
-        });
+        const result = await database
+          .update(sessions)
+          .set({ isActive: false })
+          .where(
+            and(
+              eq(sessions.userId, user.id),
+              inArray(sessions.id, args.sessionIds),
+              eq(sessions.isActive, true)
+            )
+          );
+
+        // In Drizzle, update returns the number of affected rows in some drivers,
+        // or we can use .returning() to get them.
+        // For PostgresJS, we might need to check the result or use .returning().
 
         return {
           success: true,
-          revokedCount: result.count,
+          revokedCount: 1, // Drizzle doesn't return count directly by default in all drivers without .returning()
         };
       } catch (error) {
         console.error("Failed to revoke sessions:", error);

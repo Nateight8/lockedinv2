@@ -1,6 +1,8 @@
 // src/queues/accountDeletionQueue.ts
 import { Queue, Worker, Job } from "bullmq";
-import { prisma } from "../lib/prisma";
+import { db } from "../db";
+import { users, refreshTokens } from "../db/schema";
+import { eq } from "drizzle-orm";
 
 if (!process.env.REDIS_URL) {
   throw new Error("REDIS_URL must be defined in your environment");
@@ -24,12 +26,10 @@ export const accountDeletionWorker = new Worker(
     );
 
     try {
-      await prisma.$transaction([
-        prisma.doseEvent.deleteMany({ where: { userId } }),
-        prisma.prescription.deleteMany({ where: { userId } }),
-        prisma.refreshToken.deleteMany({ where: { userId } }),
-        prisma.user.delete({ where: { id: userId } }),
-      ]);
+      await db.transaction(async (tx) => {
+        await tx.delete(refreshTokens).where(eq(refreshTokens.userId, userId));
+        await tx.delete(users).where(eq(users.id, userId));
+      });
 
       console.log(
         `[AccountDeletionWorker] User ${userId} deleted successfully.`

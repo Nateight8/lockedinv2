@@ -1,5 +1,5 @@
 import { Request } from "express";
-import type { User as PrismaUser } from "@prisma/client";
+import { User as DrizzleUser } from "@/db/schema/users";
 
 export interface EmailPayload {
   email: string;
@@ -16,9 +16,9 @@ export interface MagicLinkPayload {
 }
 
 export interface TokenPayload {
-  userId?: string;  // Made optional since we're using email as the primary identifier
+  userId?: string; // Made optional since we're using email as the primary identifier
   email: string;
-  type: "magiclink" | "otp";
+  type: "magiclink" | "otp" | "oauth" | "refresh";
   iat?: number;
   exp?: number;
   [key: string]: unknown;
@@ -33,11 +33,11 @@ export interface AuthenticatedRequest extends Request {
   user?: TokenPayload;
 }
 
-export interface User extends PrismaUser {}
+export interface User extends DrizzleUser {}
 
 export interface TokenValidationResult {
   payload: TokenPayload | null;
-  error?: 'expired' | 'invalid' | 'used_or_revoked';
+  error?: "expired" | "invalid" | "used_or_revoked";
 }
 
 export interface MagicLinkService {

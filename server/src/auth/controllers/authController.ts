@@ -4,7 +4,10 @@ import { MagicLinkServiceImpl } from "../services/magicLinkService";
 import { parse } from "useragent";
 import { redisUtil } from "@/lib/redis";
 import { TokenPayload } from "../types";
-import prisma from "@/lib/prisma";
+import { db } from "@/db";
+import { users } from "@/db/schema/users";
+import { refreshTokens } from "@/db/schema/auth";
+import { eq, and } from "drizzle-orm";
 import crypto from "crypto";
 import { addDays, isBefore } from "date-fns";
 import { createSession } from "../services/sessionService";
@@ -98,16 +101,22 @@ export const authController = {
       );
 
       // ✅ Ensure user exists in DB
-      let user = await prisma.user.findUnique({
-        where: { email: payload.email },
+      let user = await db.query.users.findFirst({
+        where: eq(users.email, payload.email),
       });
 
       if (!user) {
-        user = await prisma.user.create({
-          data: {
+        const [newUser] = await db
+          .insert(users)
+          .values({
             email: payload.email,
-          },
-        });
+          })
+          .returning();
+        user = newUser;
+      }
+
+      if (!user) {
+        throw new Error("Failed to create or find user");
       }
 
       // Detect device type
@@ -173,7 +182,9 @@ export const authController = {
       }
 
       // Get user from DB
-      const user = await prisma.user.findUnique({ where: { id: userId } });
+      const user = await db.query.users.findFirst({
+        where: eq(users.id, userId as string),
+      });
       if (!user) {
         return res.status(404).json({ error: "User not found" });
       }
@@ -197,12 +208,10 @@ export const authController = {
         .update(refreshTokenValue)
         .digest("hex");
 
-      await prisma.refreshToken.create({
-        data: {
-          tokenHash: refreshTokenHash,
-          userId: user.id,
-          expiresAt: addDays(new Date(), 30), // 30 days validity
-        },
+      await db.insert(refreshTokens).values({
+        tokenHash: refreshTokenHash,
+        userId: user.id,
+        expiresAt: addDays(new Date(), 30), // 30 days validity
       });
 
       // 3️⃣ Store both tokens in HTTP-only cookies
@@ -264,9 +273,11 @@ export const authController = {
         .digest("hex");
 
       // Find token in DB
-      const storedToken = await prisma.refreshToken.findUnique({
-        where: { tokenHash: refreshTokenHash },
-        include: { user: true },
+      const storedToken = await db.query.refreshTokens.findFirst({
+        where: eq(refreshTokens.tokenHash, refreshTokenHash),
+        with: {
+          user: true,
+        },
       });
 
       if (!storedToken || isBefore(storedToken.expiresAt, new Date())) {
@@ -275,10 +286,10 @@ export const authController = {
           .json({ error: "Invalid or expired refresh token" });
       }
 
-      const user = storedToken.user;
+      const user = (storedToken as any).user;
 
       // Create new access token
-      const payload = {
+      const payload: TokenPayload = {
         userId: user.id,
         email: user.email,
         type: "refresh",
@@ -295,16 +306,16 @@ export const authController = {
         .update(newRefreshTokenValue)
         .digest("hex");
 
-      await prisma.$transaction([
-        prisma.refreshToken.delete({ where: { id: storedToken.id } }),
-        prisma.refreshToken.create({
-          data: {
-            tokenHash: newRefreshTokenHash,
-            userId: user.id,
-            expiresAt: addDays(new Date(), 30),
-          },
-        }),
-      ]);
+      await db.transaction(async (tx) => {
+        await tx
+          .delete(refreshTokens)
+          .where(eq(refreshTokens.id, storedToken.id));
+        await tx.insert(refreshTokens).values({
+          tokenHash: newRefreshTokenHash,
+          userId: user.id,
+          expiresAt: addDays(new Date(), 30),
+        });
+      });
 
       // Set new cookies
       res.cookie("auth_token", newAccessToken, {

@@ -1,9 +1,9 @@
 import { Strategy as GoogleStrategy } from "passport-google-oauth20";
-import { PrismaClient } from "@prisma/client";
 import { Request } from "express";
 import passport from "passport";
-
-const prisma = new PrismaClient();
+import { db } from "@/db";
+import { users } from "@/db/schema/users";
+import { eq } from "drizzle-orm";
 
 // Define the user type for Passport
 interface User {
@@ -21,10 +21,15 @@ passport.serializeUser((user: Express.User, done) => {
 // Deserialize user from the session
 passport.deserializeUser(async (id: string, done) => {
   try {
-    const user = await prisma.user.findUnique({
-      where: { id },
-      select: { id: true, email: true, name: true },
+    const user = await db.query.users.findFirst({
+      where: eq(users.id, id),
+      columns: { id: true, email: true, name: true },
     });
+
+    if (!user) {
+      return done(null, false);
+    }
+
     done(null, user);
   } catch (error) {
     done(error);
@@ -59,17 +64,25 @@ export const configureGoogleStrategy = () => {
         done: any
       ) => {
         try {
-          // Find or create user
-          const user = await prisma.user.upsert({
-            where: { email: profile.emails[0].value },
-            update: {
-              name: profile.name?.givenName,
-            },
-            create: {
+          // Find or create user using Drizzle's insert with onConflictDoUpdate
+          const [user] = await db
+            .insert(users)
+            .values({
               email: profile.emails[0].value,
               name: profile.name?.givenName,
-            },
-          });
+            })
+            .onConflictDoUpdate({
+              target: users.email,
+              set: {
+                name: profile.name?.givenName,
+                updatedAt: new Date(),
+              },
+            })
+            .returning();
+
+          if (!user) {
+            return done(new Error("Failed to create or update user"), null);
+          }
 
           return done(null, {
             id: user.id,

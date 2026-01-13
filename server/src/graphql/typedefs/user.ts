@@ -11,8 +11,6 @@ export const userTypeDefs = gql`
     phone: String
     name: String
     timeZone: String
-    prescriptions: [Prescription!]!
-    doseEvents: [DoseEvent!]!
     createdAt: String!
     updatedAt: String!
   }
