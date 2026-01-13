@@ -2,7 +2,7 @@ import { Router } from "express";
 import { authController } from "../controllers/authController";
 import { qrController } from "../controllers/qrcodeControler";
 
-const router = Router();
+const router: Router = Router();
 
 // Magic Link endpoints
 router.post("/auth/magiclink", authController.sendMagicLink);
@@ -13,6 +13,7 @@ router.post("/auth/magiclink/revoke", authController.revokeAuth);
 router.get("/auth/qr", qrController.generateQRCode);
 router.post("/auth/continue", authController.continueOnDevice);
 router.post("/auth/poll", authController.pollAuthStatus);
+router.get("/auth/qr-status", authController.getQRStatus);
 
 // Token Management
 router.post("/auth/refresh-token", authController.refreshToken);

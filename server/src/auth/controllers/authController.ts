@@ -361,4 +361,33 @@ export const authController = {
       });
     }
   },
+
+  async getQRStatus(req: Request, res: Response) {
+    const { requestId } = req.query;
+
+    if (!requestId || typeof requestId !== "string") {
+      return res.status(400).json({ error: "requestId is required" });
+    }
+
+    try {
+      const status = await magicLinkService.getAuthRequestStatus(requestId);
+
+      if (!status) {
+        return res
+          .status(404)
+          .json({ error: "Auth request not found or expired" });
+      }
+
+      return res.status(200).json({
+        ...status,
+        success: true,
+      });
+    } catch (error) {
+      console.error("[AuthController] Error getting QR auth status:", error);
+      return res.status(500).json({
+        error: "Failed to get QR auth status",
+        success: false,
+      });
+    }
+  },
 };
